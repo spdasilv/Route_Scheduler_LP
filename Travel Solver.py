@@ -87,9 +87,9 @@ Cij = {
 model.Cij = Param(model.i, model.j, initialize=Cij, doc='Cost of Trip')
 
 Adt = {}
-for j in len(day_slots):
+for j in range(0, len(day_slots)):
     for i in range(0, 96):
-        if 32 <= i <= 32 + day_slots[j]:
+        if 32 <= i < 32 + day_slots[j]:
             Adt[(j, i)] = 1
         else:
             Adt[(j, i)] = 0
@@ -106,57 +106,77 @@ for i in range(0, 5):
 
 model.Oidt = Param(model.i, model.d, model.t, doc='Business Hours')
 
-#  Parameter c(i,j)  transport cost in thousands of dollars per case ;
-#            c(i,j) = f * d(i,j) / 1000 ;
-def c_init(model, i, j):
-    return model.f * model.d[i, j] / 1000
-
-
-model.c = Param(model.i, model.j, initialize=c_init, doc='Transport cost in thousands of dollar per case')
-
 ## Define variables ##
-#  Variables
-#       x(i,j)  shipment quantities in cases
-#       z       total transportation costs in thousands of dollars ;
-#  Positive Variable x ;
-model.x = Var(model.i, model.j, bounds=(0.0, None), doc='Shipment quantities in case')
+model.Yijdt = Var(model.i, model.j, model.d, model.t, within=Binary, doc='Going to Activity')
+model.Sijdt = Var(model.i, model.j, model.d, model.t, within=Binary, doc='Followed by Activity')
 
 
 ## Define contrains ##
-# supply(i)   observe supply limit at plant i
-# supply(i) .. sum (j, x(i,j)) =l= a(i)
-def supply_rule(model, i):
-    return sum(model.x[i, j] for j in model.j) <= model.a[i]
+def startDay(model, d, t):
+    return sum(model.Sijdt[0, j, d, t] for j in model.j) <= model.Adt[d, t]
+model.startDay = Constraint(model.d, model.t, rule=startDay, doc='Start Day Rule')
 
 
-model.supply = Constraint(model.i, rule=supply_rule, doc='Observe supply limit at plant i')
+def endDay(model, d, t):
+    return sum(model.Sijdt[i, 0, d, t] for i in model.i) <= model.Adt[d, t + model.Cij[i, 0] + model.Ti[i]]
+model.endDay = Constraint(model.d, model.t, rule=endDay, doc='End Day Rule')
 
 
-# demand(j)   satisfy demand at market j ;
-# demand(j) .. sum(i, x(i,j)) =g= b(j);
-def demand_rule(model, j):
-    return sum(model.x[i, j] for i in model.i) >= model.b[j]
+def startIfOpen(model, i, d, t):
+    return sum(model.Sijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
+model.startIfOpen = Constraint(model.d, model.t, rule=startIfOpen, doc='Start if Open')
 
 
-model.demand = Constraint(model.j, rule=demand_rule, doc='Satisfy demand at market j')
+def continueIfOpen(model, i, d, t):
+    return sum(model.Sijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
+model.continueIfOpen = Constraint(model.i, model.d, model.t, rule=continueIfOpen, doc='Continue if Open')
 
+
+def startOnce(model, i):
+    return sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) <= 1
+model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
+
+
+def startAtHotel(model, d):
+    return sum(model.Sijdt[0, j, d, t] for j in model.j for t in model.t) == 1
+model.supply = Constraint(model.i, rule=supply_rule, doc='Start at Hotel')
+
+
+def endAtHotel(model, d):
+    return sum(model.Sijdt[i, 0, d, t] for i in model.i for t in model.t) == 1
+model.demand = Constraint(model.j, rule=demand_rule, doc='End at Hotel')
+
+
+def CompAct(model, i, j, d, t):
+    return (model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] == sum(model.Yijdt[i, j, d, t] for t in range(t, t + model.Cij[i, j] + model.Ti[i]))
+model.CompAct = Constraint(model.i, model.j, model.d, model.t, rule=CompAct, doc='Complete Activity')
+
+
+def timeAvailable(model, d):
+    return sum(model.Cij[i, j]*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t)\
+           + sum(model.Ti[i]*sum(model.Sijdt[i, j, d, t] for j in model.j for t in model.t) for i in model.i)\
+           + sum(model.Cij[i, j]*sum(model.Sijdt[0, j, d, t] for t in model.t) for j in model.j)\
+           + sum(model.Cij[i, j]*sum(model.Sijdt[i, 0, d, t] for t in model.t) for i in model.i)\
+           <= model.Rd[d]
+model.timeAvailable = Constraint(model.d, rule=timeAvailable, doc='Time Available')
+
+
+def limitActivities(model, d, t):
+    return sum(model.Yijdt[i, j, d, t] for i in model.i for j in model.j) <= 1
+model.limitActivities = Constraint(model.j, rule=limitActivities, doc='Schedule Activities')
 
 ## Define Objective and solve ##
-#  cost        define objective function
-#  cost ..        z  =e=  sum((i,j), c(i,j)*x(i,j)) ;
-#  Model transport /all/ ;
-#  Solve transport using lp minimizing z ;
-def objective_rule(model):
-    return sum(model.c[i, j] * model.x[i, j] for i in model.i for j in model.j)
+def objectiveRule(model):
+    return sum(model.Wi[i]*sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) for i in model.i)
 
 
-model.objective = Objective(rule=objective_rule, sense=minimize, doc='Define objective function')
+model.objectiveRule = Objective(rule=objectiveRule, sense=maximize, doc='Define Objective Function')
 
 
 ## Display of the output ##
 # Display x.l, x.m ;
 def pyomo_postprocess(options=None, instance=None, results=None):
-    model.x.display()
+    model.Yijdt.display()
 
 
 # This is an optional code path that allows the script to be run outside of
