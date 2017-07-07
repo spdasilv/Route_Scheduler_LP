@@ -23,10 +23,10 @@ model.j = SetOf(model.i)
 #   Parameters
 #       T(i)  Time spent at activity i
 #         /    0     0
-#              1     3
-#              2     4
-#              3     3
-#              4     2  /
+#              1     1
+#              2     1
+#              3     1
+#              4     1  /
 #       W(i)  Weights for activity i
 #         /    0     4
 #              1     2
@@ -59,29 +59,29 @@ model.Rd = Param(model.d, initialize=Rd, doc='Day Slots')
 # Comments Here
 Cij = {
     (0, 0): 0,
-    (0, 1): 2,
+    (0, 1): 1,
     (0, 2): 1,
     (0, 3): 1,
-    (0, 4): 3,
-    (1, 0): 2,
+    (0, 4): 1,
+    (1, 0): 1,
     (1, 1): 0,
     (1, 2): 1,
-    (1, 3): 2,
-    (1, 4): 3,
+    (1, 3): 1,
+    (1, 4): 1,
     (2, 0): 1,
     (2, 1): 1,
     (2, 2): 0,
-    (2, 3): 3,
-    (2, 4): 2,
+    (2, 3): 1,
+    (2, 4): 1,
     (3, 0): 1,
     (3, 1): 1,
-    (3, 2): 3,
+    (3, 2): 1,
     (3, 3): 0,
-    (3, 4): 2,
-    (4, 0): 3,
-    (4, 1): 3,
-    (4, 2): 2,
-    (4, 3): 2,
+    (3, 4): 1,
+    (4, 0): 1,
+    (4, 1): 1,
+    (4, 2): 1,
+    (4, 3): 1,
     (4, 4): 0
 }
 model.Cij = Param(model.i, model.j, initialize=Cij, doc='Cost of Trip')
@@ -112,29 +112,19 @@ model.Sijdt = Var(model.i, model.j, model.d, model.t, within=Binary, doc='Follow
 
 
 ## Define contrains ##
-def startDay(model, d, t):
-    return sum(model.Sijdt[0, j, d, t] for j in model.j) <= model.Adt[d, t]
-model.startDay = Constraint(model.d, model.t, rule=startDay, doc='Start Day Rule')
-
-
 # def endDay(model, d, t):
-#     return sum(model.Sijdt[i, 0, d, t] for i in model.i) <= model.Adt[d, t + model.Cij[i, 0] + model.Ti[i]]
+#     return sum(model.Sijdt[i, j, d, t] for i in model.i for j in model.j) <= model.Adt[d, t]
 # model.endDay = Constraint(model.d, model.t, rule=endDay, doc='End Day Rule')
-
-
-def startIfOpen(model, i, d, t):
-    return sum(model.Sijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
-model.startIfOpen = Constraint(model.i, model.d, model.t, rule=startIfOpen, doc='Start if Open')
-
-
+#
+#
 # def continueIfOpen(model, i, d, t):
-#     return sum(model.Sijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
+#     return sum(model.Yijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
 # model.continueIfOpen = Constraint(model.i, model.d, model.t, rule=continueIfOpen, doc='Continue if Open')
-
-
-def startOnce(model, i):
-    return sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) <= 1
-model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
+#
+#
+# def startOnce(model, i):
+#     return sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) <= 1
+# model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
 
 
 def startAtHotel(model, d):
@@ -152,18 +142,15 @@ model.endAtHotel = Constraint(model.d, rule=endAtHotel, doc='End at Hotel')
 # model.CompAct = Constraint(model.i, model.j, model.d, model.t, rule=CompAct, doc='Complete Activity')
 
 
-def timeAvailable(model, d):
-    return sum(model.Cij[i, j]*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t)\
-           + sum(model.Ti[i]*sum(model.Sijdt[i, j, d, t] for j in model.j for t in model.t) for i in model.i)\
-           + sum(model.Cij[i, j]*sum(model.Sijdt[0, j, d, t] for t in model.t) for j in model.j)\
-           + sum(model.Cij[i, j]*sum(model.Sijdt[i, 0, d, t] for t in model.t) for i in model.i)\
-           <= model.Rd[d]
-model.timeAvailable = Constraint(model.d, rule=timeAvailable, doc='Time Available')
-
-
-def limitActivities(model, d, t):
-    return sum(model.Yijdt[i, j, d, t] for i in model.i for j in model.j) <= 1
-model.limitActivities = Constraint(model.d, model.t, rule=limitActivities, doc='Schedule Activities')
+# def timeAvailable(model, d):
+#     return sum((model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) <= model.Rd[d]
+# #     return sum(model.Cij[i, j]*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) + sum(model.Ti[i]*sum(model.Sijdt[i, j, d, t] for j in model.j for t in model.t) for i in model.i) + sum(model.Cij[0, j]*sum(model.Sijdt[0, j, d, t] for t in model.t) for j in model.j) + sum(model.Cij[i, 0]*sum(model.Sijdt[i, 0, d, t] for t in model.t) for i in model.i) <= model.Rd[d]
+# model.timeAvailable = Constraint(model.d, rule=timeAvailable, doc='Time Available')
+#
+#
+# def limitActivities(model, d, t):
+#     return sum(model.Yijdt[i, j, d, t] for i in model.i for j in model.j) <= 1
+# model.limitActivities = Constraint(model.d, model.t, rule=limitActivities, doc='Schedule Activities')
 
 ## Define Objective and solve ##
 def objectiveRule(model):
@@ -179,8 +166,6 @@ def pyomo_postprocess(options=None, instance=None, results=None):
     model.Sijdt.display()
 
 
-# This is an optional code path that allows the script to be run outside of
-# pyomo command-line.  For example:  python transport.py
 if __name__ == '__main__':
     # This emulates what the pyomo command-line tools does
     from pyomo.opt import SolverFactory
