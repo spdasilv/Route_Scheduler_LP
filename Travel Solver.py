@@ -130,11 +130,11 @@ def startOnce(model, i):
 model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
 
 
-# def startAtHotel(model, d):
-#     return sum(model.Sijdt[0, j, d, t] for j in model.j for t in model.t) == 1
-# model.startAtHotel = Constraint(model.d, rule=startAtHotel, doc='Start at Hotel')
-#
-#
+def startAtHotel(model, d):
+    return sum(model.Sijdt[0, j, d, t] for j in model.j for t in model.t) == 1
+model.startAtHotel = Constraint(model.d, rule=startAtHotel, doc='Start at Hotel')
+
+
 def endAtHotel(model, d):
     return sum(model.Sijdt[i, 0, d, t] for i in model.i for t in model.t) == 1
 model.endAtHotel = Constraint(model.d, rule=endAtHotel, doc='End at Hotel')
@@ -145,14 +145,10 @@ def circularRule(model, d, t):
 model.circularRule = Constraint(model.d, model.t, rule=circularRule, doc='No Circles')
 
 
-def FuckAll(model, i, j, t):
-    temp = Set(initialize=range(t, 96 - model.Ti[i] - model.Cij[i, j]), doc='Temp')
-    return Constraint(model.i, model.j, model.d, model.t, temp, rule=CompAct, doc='Complete Activity')
-
-def CompAct(model, i, j, d, t, tmp):
-    return (model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] <= sum(model.Yijdt[i, j, d, t] for t in range(t, tmp))
-
-model.FuckAll = Constraint(model.i, model.j, model.t, rule=FuckAll, doc='Complete Activity')
+def CompAct(model, i, j, d, t):
+    tmax = 96 if t + model.Cij[i, j] + model.Ti[i] + 1 >= 96 else t + model.Cij[i, j] + model.Ti[i] + 1
+    return (model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] <= sum(model.Yijdt[i, j, d, g] for g in range(t, tmax))
+model.CompAct = Constraint(model.i, model.j, model.d, model.t, rule=CompAct, doc='Complete Activity')
 
 
 def timeAvailable(model, d):
