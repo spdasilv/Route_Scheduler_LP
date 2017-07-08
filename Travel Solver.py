@@ -42,7 +42,7 @@ Ti = {}
 for i in range(0, len(time_values)):
     Ti[i] = time_values[i]
 
-weight_values = [4, 2, 2, 5, 7]
+weight_values = [0, 2, 2, 5, 7]
 Wi = {}
 for i in range(0, len(weight_values)):
     Wi[i] = weight_values[i]
@@ -99,6 +99,9 @@ Oidt = {}
 for i in range(0, 5):
     for d in range(0, 2):
         for t in range(0, 96):
+            if i == 0:
+                Oidt[(i, d, t)] = 1
+                continue
             if 32 <= t <= 50:
                 Oidt[(i, d, t)] = 1
             else:
@@ -111,46 +114,56 @@ model.Yijdt = Var(model.i, model.j, model.d, model.t, within=Binary, doc='Going 
 model.Sijdt = Var(model.i, model.j, model.d, model.t, within=Binary, doc='Followed by Activity')
 
 
-## Define contrains ##
-# def endDay(model, d, t):
-#     return sum(model.Sijdt[i, j, d, t] for i in model.i for j in model.j) <= model.Adt[d, t]
-# model.endDay = Constraint(model.d, model.t, rule=endDay, doc='End Day Rule')
-#
-#
-# def continueIfOpen(model, i, d, t):
-#     return sum(model.Yijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
-# model.continueIfOpen = Constraint(model.i, model.d, model.t, rule=continueIfOpen, doc='Continue if Open')
-#
-#
-# def startOnce(model, i):
-#     return sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) <= 1
-# model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
+## Define constraints ##
+def endDay(model, d, t):
+    return sum(model.Sijdt[i, j, d, t] for i in model.i for j in model.j) <= model.Adt[d, t]
+model.endDay = Constraint(model.d, model.t, rule=endDay, doc='End Day Rule')
 
 
-def startAtHotel(model, d):
-    return sum(model.Sijdt[0, j, d, t] for j in model.j for t in model.t) == 1
-model.startAtHotel = Constraint(model.d, rule=startAtHotel, doc='Start at Hotel')
+def continueIfOpen(model, i, d, t):
+    return sum(model.Yijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
+model.continueIfOpen = Constraint(model.i, model.d, model.t, rule=continueIfOpen, doc='Continue if Open')
 
 
+def startOnce(model, i):
+    return sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) <= 1
+model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
+
+
+# def startAtHotel(model, d):
+#     return sum(model.Sijdt[0, j, d, t] for j in model.j for t in model.t) == 1
+# model.startAtHotel = Constraint(model.d, rule=startAtHotel, doc='Start at Hotel')
+#
+#
 def endAtHotel(model, d):
     return sum(model.Sijdt[i, 0, d, t] for i in model.i for t in model.t) == 1
 model.endAtHotel = Constraint(model.d, rule=endAtHotel, doc='End at Hotel')
 
 
-# def CompAct(model, i, j, d, t):
-#     return (model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] == sum(model.Yijdt[i, j, d, t] for t in range(t, t + model.Cij[i, j] + model.Ti[i]))
-# model.CompAct = Constraint(model.i, model.j, model.d, model.t, rule=CompAct, doc='Complete Activity')
+def circularRule(model, d, t):
+    return sum(model.Sijdt[i, i, d, t] for i in model.i) == 0
+model.circularRule = Constraint(model.d, model.t, rule=circularRule, doc='No Circles')
 
 
-# def timeAvailable(model, d):
-#     return sum((model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) <= model.Rd[d]
-# #     return sum(model.Cij[i, j]*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) + sum(model.Ti[i]*sum(model.Sijdt[i, j, d, t] for j in model.j for t in model.t) for i in model.i) + sum(model.Cij[0, j]*sum(model.Sijdt[0, j, d, t] for t in model.t) for j in model.j) + sum(model.Cij[i, 0]*sum(model.Sijdt[i, 0, d, t] for t in model.t) for i in model.i) <= model.Rd[d]
-# model.timeAvailable = Constraint(model.d, rule=timeAvailable, doc='Time Available')
+def FuckAll(model, i, j, t):
+    temp = Set(initialize=range(t, 96 - model.Ti[i] - model.Cij[i, j]), doc='Temp')
+    return Constraint(model.i, model.j, model.d, model.t, temp, rule=CompAct, doc='Complete Activity')
+
+def CompAct(model, i, j, d, t, tmp):
+    return (model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] <= sum(model.Yijdt[i, j, d, t] for t in range(t, tmp))
+
+model.FuckAll = Constraint(model.i, model.j, model.t, rule=FuckAll, doc='Complete Activity')
+
+
+def timeAvailable(model, d):
+    return sum((model.Cij[i, j] + model.Ti[i])*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) <= model.Rd[d]
+#     return sum(model.Cij[i, j]*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) + sum(model.Ti[i]*sum(model.Sijdt[i, j, d, t] for j in model.j for t in model.t) for i in model.i) + sum(model.Cij[0, j]*sum(model.Sijdt[0, j, d, t] for t in model.t) for j in model.j) + sum(model.Cij[i, 0]*sum(model.Sijdt[i, 0, d, t] for t in model.t) for i in model.i) <= model.Rd[d]
+model.timeAvailable = Constraint(model.d, rule=timeAvailable, doc='Time Available')
 #
 #
-# def limitActivities(model, d, t):
-#     return sum(model.Yijdt[i, j, d, t] for i in model.i for j in model.j) <= 1
-# model.limitActivities = Constraint(model.d, model.t, rule=limitActivities, doc='Schedule Activities')
+def limitActivities(model, d, t):
+    return sum(model.Yijdt[i, j, d, t] for i in model.i for j in model.j) <= 1
+model.limitActivities = Constraint(model.d, model.t, rule=limitActivities, doc='Schedule Activities')
 
 ## Define Objective and solve ##
 def objectiveRule(model):
