@@ -115,17 +115,19 @@ model.Sijdt = Var(model.i, model.j, model.d, model.t, within=Binary, doc='Follow
 
 
 ## Define constraints ##
-def endDay(model, d, t):
+def Availability(model, d, t):
     return sum(model.Sijdt[i, j, d, t] for i in model.i for j in model.j) <= model.Adt[d, t]
-model.endDay = Constraint(model.d, model.t, rule=endDay, doc='End Day Rule')
+model.Availability = Constraint(model.d, model.t, rule=Availability, doc='Availability')
 
 
-def continueIfOpen(model, i, d, t):
+def IsOpen(model, i, d, t):
     return sum(model.Yijdt[i, j, d, t] for j in model.j) <= model.Oidt[i, d, t]
-model.continueIfOpen = Constraint(model.i, model.d, model.t, rule=continueIfOpen, doc='Continue if Open')
+model.IsOpen = Constraint(model.i, model.d, model.t, rule=IsOpen, doc='Continue if Open')
 
 
 def startOnce(model, i):
+    if i == 0:
+        i = 1
     return sum(model.Sijdt[i, j, d, t] for j in model.j for d in model.d for t in model.t) <= 1
 model.startOnce = Constraint(model.i, rule=startOnce, doc='Start Activity Once')
 
