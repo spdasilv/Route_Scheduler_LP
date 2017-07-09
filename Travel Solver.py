@@ -120,12 +120,23 @@ def Availability(model, i, j, d, t):
     return model.Sijdt[i, j, d, t] <= model.Adt[d, tmax]
 model.Availability = Constraint(model.i, model.j, model.d, model.t, rule=Availability, doc='Availability')
 
+
+def GroupAvailability(model, i, j, d, t):
+    return model.Sijdt[i, j, d, t] <= model.Adt[d, t]
+model.GroupAvailability = Constraint(model.i, model.j, model.d, model.t, rule=GroupAvailability, doc='Group Availability')
+
+
 def IsOpen(model,i, j, d, t):
     tmax = 95 if t + model.Cij[i, j] + model.Ti[j] >= 95 else t + model.Cij[i, j] + model.Ti[j]
     return model.Sijdt[i, j, d, t] <= model.Oidt[j, d, tmax]
 model.IsOpen = Constraint(model.i, model.j, model.d, model.t, rule=IsOpen, doc='Is Open')
-#
-#
+
+
+def BusinessAvailability(model, i, j, d, t):
+    return model.Sijdt[i, j, d, t] <= model.Oidt[i, d, t]
+model.BusinessAvailability = Constraint(model.i, model.j, model.d, model.t, rule=BusinessAvailability, doc='Business Availability')
+
+
 def startOnce(model, i):
     if i == 0:
         i = 1
