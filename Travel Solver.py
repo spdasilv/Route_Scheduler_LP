@@ -37,12 +37,12 @@ model.j = SetOf(model.i)
 #         /    0     6
 #              1     8  /;
 
-time_values = [0, 2, 2, 2, 2]
+time_values = [0, 2, 2, 2, 20]
 Ti = {}
 for i in range(0, len(time_values)):
     Ti[i] = time_values[i]
 
-weight_values = [0, 2, 2, 5, 7]
+weight_values = [0, 2, 2, 5, 9]
 Wi = {}
 for i in range(0, len(weight_values)):
     Wi[i] = weight_values[i]
@@ -158,8 +158,8 @@ model.startAtHotel = Constraint(model.d, rule=startAtHotel, doc='Start at Hotel'
 def endAtHotel(model, d):
     return sum(model.Sijdt[i, 0, d, t] for i in model.i for t in model.t) == 1
 model.endAtHotel = Constraint(model.d, rule=endAtHotel, doc='End at Hotel')
-#
-#
+
+
 def circularRule(model, d, t):
     return sum(model.Sijdt[i, i, d, t] for i in model.i) == 0
 model.circularRule = Constraint(model.d, model.t, rule=circularRule, doc='No Circles')
@@ -167,9 +167,18 @@ model.circularRule = Constraint(model.d, model.t, rule=circularRule, doc='No Cir
 
 def CompAct(model, i, j, d, t):
     tmax = 96 if t + model.Cij[i, j] + model.Ti[j] + 1 >= 96 else t + model.Cij[i, j] + model.Ti[j] + 1
-    return sum(model.Sijdt[h, f, d, g] for h in model.i for f in model.j for g in range(t + 1, tmax)) + model.Sijdt[i, j, d, t] <= 1
+    return sum(model.Yijdt[i, j, d, g] for g in range(t, tmax)) >= model.Sijdt[i, j, d, t]*(model.Cij[i, j] + model.Ti[j])
 model.CompAct = Constraint(model.i, model.j, model.d, model.t, rule=CompAct, doc='Complete Activity')
 
+
+def NoIntersect(model, d, t):
+    return sum(model.Yijdt[i, j, d, t] for i in model.i for j in model.j) <= 1
+model.NoIntersect = Constraint(model.d, model.t, rule=NoIntersect, doc='No Intersect')
+
+
+def PleaseWork(model, i, j, d, t):
+    return sum(model.Yijdt[g, h, d, t] for g in model.i for h in model.j) + model.Sijdt[i, j, d, t] <= 1
+model.PleaseWork = Constraint(model.i, model.j, model.d, model.t, rule=PleaseWork, doc='Please Work')
 
 def timeAvailable(model, d):
     return sum((model.Cij[i, j] + model.Ti[j])*model.Sijdt[i, j, d, t] for i in model.i for j in model.j for t in model.t) <= model.Rd[d]
@@ -198,7 +207,7 @@ model.objectiveRule = Objective(rule=objectiveRule, sense=maximize, doc='Define 
 ## Display of the output ##
 # Display x.l, x.m ;
 def pyomo_postprocess(options=None, instance=None, results=None):
-    model.Sijdt.display()
+    model.Yijdt.display()
 
 
 if __name__ == '__main__':
